@@ -1,107 +1,51 @@
-"""
-Association Rule Mining using Apriori algorithm.
-Finds patterns between violation types co-occurring in the same area/day.
-"""
-
 import pandas as pd
 import numpy as np
 
-try:
-    from mlxtend.frequent_patterns import apriori, association_rules
-    from mlxtend.preprocessing import TransactionEncoder
-    MLXTEND_AVAILABLE = True
-except ImportError:
-    MLXTEND_AVAILABLE = False
-
-
-def build_transactions(df: pd.DataFrame, by: str = "violation_type") -> list:
-    """
-    Build transaction list grouped by date + area.
-    Each transaction = set of violations that occurred on same day in same area.
-    """
-    if df.empty:
-        return []
-
-    df = df.copy()
-    df["date_str"] = pd.to_datetime(df["date"]).dt.date.astype(str)
-
-    if by == "violation_type":
-        transactions = (
-            df.groupby(["date_str", "area"])["violation_type"]
-            .apply(list)
-            .tolist()
-        )
-    elif by == "area":
-        transactions = (
-            df.groupby(["date_str", "month"])["area"]
-            .apply(list)
-            .tolist()
-        )
+def _add_anomaly_labels(df, threshold):
+    mean = df["count"].mean()
+    std = df["count"].std()
+    if std == 0 or pd.isna(std):
+        df["z_score"] = 0.0
     else:
-        transactions = (
-            df.groupby(["date_str", "area"])["violation_type"]
-            .apply(list)
-            .tolist()
-        )
-
-    # Remove duplicates within each transaction, keep only non-empty
-    transactions = [list(set(t)) for t in transactions if len(t) > 0]
-    return transactions
-
-
-def run_association_rules(
-    df: pd.DataFrame,
-    min_support: float = 0.05,
-    min_confidence: float = 0.4,
-    min_lift: float = 1.0,
-    by: str = "violation_type",
-) -> tuple:
-    """
-    Run Apriori + association rules.
-    Returns: (frequent_itemsets_df, rules_df)
-    """
-    if not MLXTEND_AVAILABLE:
-        return pd.DataFrame(), pd.DataFrame()
-
-    transactions = build_transactions(df, by=by)
-
-    if len(transactions) < 5:
-        return pd.DataFrame(), pd.DataFrame()
-
-    te = TransactionEncoder()
-    te_array = te.fit_transform(transactions)
-    trans_df = pd.DataFrame(te_array, columns=te.columns_)
-
-    # Run Apriori
-    frequent_itemsets = apriori(
-        trans_df,
-        min_support=min_support,
-        use_colnames=True,
-        max_len=3,
+        df["z_score"] = (df["count"] - mean) / std
+    df["is_anomaly"] = df["z_score"].abs() > threshold
+    df["anomaly_type"] = df.apply(
+        lambda r: "🔴 High Anomaly" if r["z_score"] > threshold
+        else "🔵 Low Anomaly" if r["z_score"] < -threshold
+        else "✅ Normal", axis=1,
     )
+    df["z_score"] = df["z_score"].round(3)
+    return df
 
-    if frequent_itemsets.empty:
-        return frequent_itemsets, pd.DataFrame()
+def compute_zscore_anomalies(df, group_by="area", threshold=2.0):
+    if df.empty: return pd.DataFrame()
+    counts = df.groupby(group_by)["id"].count().reset_index()
+    counts.columns = [group_by, "count"]
+    counts = _add_anomaly_labels(counts, threshold)
+    return counts.sort_values("z_score", ascending=False).reset_index(drop=True)
 
-    # Generate rules
-    rules = association_rules(
-        frequent_itemsets,
-        metric="confidence",
-        min_threshold=min_confidence,
-        num_itemsets=len(frequent_itemsets),
-    )
+def compute_temporal_anomalies(df, time_col="date", threshold=2.0):
+    if df.empty: return pd.DataFrame()
+    temp = df.copy()
+    temp["date_only"] = pd.to_datetime(temp[time_col]).dt.date
+    daily = temp.groupby("date_only")["id"].count().reset_index()
+    daily.columns = ["date", "count"]
+    daily = _add_anomaly_labels(daily, threshold)
+    return daily.sort_values("date").reset_index(drop=True)
 
-    # Filter by lift
-    rules = rules[rules["lift"] >= min_lift].copy()
+def compute_hour_anomalies(df, threshold=2.0):
+    if df.empty: return pd.DataFrame()
+    hourly = df.groupby("hour")["id"].count().reset_index()
+    hourly.columns = ["hour", "count"]
+    all_hours = pd.DataFrame({"hour": range(24)})
+    hourly = all_hours.merge(hourly, on="hour", how="left").fillna(0)
+    hourly["count"] = hourly["count"].astype(int)
+    hourly = _add_anomaly_labels(hourly, threshold)
+    return hourly.sort_values("hour").reset_index(drop=True)
 
-    # Clean up for display
-    rules["antecedents"] = rules["antecedents"].apply(lambda x: ", ".join(list(x)))
-    rules["consequents"] = rules["consequents"].apply(lambda x: ", ".join(list(x)))
-    rules = rules.round(4)
-
-    freq_display = frequent_itemsets.copy()
-    freq_display["itemsets"] = freq_display["itemsets"].apply(
-        lambda x: ", ".join(list(x))
-    )
-
-    return freq_display, rules
+def compute_violation_type_anomalies(df, threshold=2.0):
+    if df.empty: return pd.DataFrame()
+    counts = df.groupby("violation_type")["id"].count().reset_index()
+    counts.columns = ["violation_type", "count"]
+    counts = _add_anomaly_labels(counts, threshold)
+    return counts.sort_values("z_score", ascending=False).reset_index(drop=True)

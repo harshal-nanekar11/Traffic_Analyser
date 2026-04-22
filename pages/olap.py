@@ -27,7 +27,7 @@ def _enrich(df: pd.DataFrame) -> pd.DataFrame:
     """Add derived time columns needed for OLAP operations."""
     out = df.copy()
     out["date"] = pd.to_datetime(out["date"])
-    out["year"]    = out["date"].dt.year.astype(str)
+    out["year"] = out["date"].dt.year.astype("Int64").astype(str).replace("<NA>", "Unknown")
     out["quarter"] = out["date"].dt.quarter.apply(lambda q: f"Q{q}")
     out["time_period"] = out["hour"].apply(
         lambda h: "🌙 Night (0–6)"       if h < 6
@@ -139,7 +139,7 @@ def render(df: pd.DataFrame):
 
         r1, r2, r3 = st.columns(3)
         with r1:
-            years   = sorted(cube["year"].unique().tolist())
+            years = sorted(cube["year"].dropna().unique().tolist(), key=str)
             sel_yr  = st.selectbox("Year", years, key="dd_yr")
         year_data = cube[cube["year"] == sel_yr]
 

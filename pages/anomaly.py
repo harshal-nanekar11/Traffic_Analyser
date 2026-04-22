@@ -144,13 +144,13 @@ def render(df: pd.DataFrame):
 
             st.plotly_chart(
                 _anomaly_bar(
-                    area_df["area"], area_df["count"], area_df["z_score"],
+                    area_df["area"].tolist(), area_df["count"].tolist(), area_df["z_score"].tolist(),
                     threshold, "Violation Count per Area  (🔴 = High Anomaly, 🔵 = Low Anomaly)", "Area"
                 ),
                 use_container_width=True,
             )
             st.plotly_chart(
-                _zscore_bar(area_df["area"], area_df["z_score"], threshold, "Z-Score per Area"),
+                _zscore_bar(area_df["area"].tolist(), area_df["z_score"].tolist(), threshold, "Z-Score per Area"),
                 use_container_width=True,
             )
 
@@ -272,13 +272,13 @@ def render(df: pd.DataFrame):
 
             st.plotly_chart(
                 _anomaly_bar(
-                    hour_df["hour"], hour_df["count"], hour_df["z_score"],
+                    hour_df["hour"].tolist(), hour_df["count"].tolist(), hour_df["z_score"].tolist(),
                     threshold, "Violations by Hour  (🔴 = Anomalous Peak)", "Hour of Day"
                 ),
                 use_container_width=True,
             )
             st.plotly_chart(
-                _zscore_bar(hour_df["hour"], hour_df["z_score"], threshold, "Z-Score by Hour"),
+                _zscore_bar(hour_df["hour"].tolist(), hour_df["z_score"].tolist(), threshold, "Z-Score by Hour"),
                 use_container_width=True,
             )
 
@@ -301,14 +301,14 @@ def render(df: pd.DataFrame):
         else:
             st.plotly_chart(
                 _anomaly_bar(
-                    vtype_df["violation_type"], vtype_df["count"], vtype_df["z_score"],
+                    vtype_df["violation_type"].tolist(), vtype_df["count"].tolist(), vtype_df["z_score"].tolist(),
                     threshold, "Violation Type Frequency  (Anomalies Highlighted)", "Violation Type"
                 ),
                 use_container_width=True,
             )
             st.plotly_chart(
                 _zscore_bar(
-                    vtype_df["violation_type"], vtype_df["z_score"],
+                    vtype_df["violation_type"].tolist(), vtype_df["z_score"].tolist(),
                     threshold, "Z-Score by Violation Type"
                 ),
                 use_container_width=True,
